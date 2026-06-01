@@ -1,0 +1,10 @@
+Django==4.2.13
+celery==5.3.6
+redis==5.0.3
+channels==4.0.0
+channels-redis==4.2.0
+daphne==4.1.0
+django-celery-results==2.5.1
+ipaddress==1.0.23
+dnspython==2.6.1
+whitenoise==6.7.0

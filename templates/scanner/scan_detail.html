@@ -1,0 +1,401 @@
+{% extends "scanner/base.html" %}
+{% load scanner_tags %}
+{% block title %}NetProbe — Scan {{ job.target }}{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* ── Header ──────────────────────────────────────────── */
+  .scan-header {
+    display: flex; align-items: flex-start; gap: 1.5rem;
+    margin-bottom: 2rem; flex-wrap: wrap;
+  }
+  .scan-meta { flex: 1; }
+  .scan-target {
+    font-family: var(--mono);
+    font-size: 1.6rem;
+    color: var(--green);
+    text-shadow: var(--glow);
+    word-break: break-all;
+  }
+  .scan-sub { color: var(--text-dim); font-size: .88rem; margin-top: .3rem; }
+  .scan-actions { display: flex; gap: .6rem; }
+
+  /* ── Stats grid ──────────────────────────────────────── */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+  .stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    text-align: center;
+    animation: fadeInUp .35s ease both;
+  }
+  .stat-val {
+    font-family: var(--mono);
+    font-size: 1.8rem;
+    color: var(--green);
+    text-shadow: var(--glow);
+    display: block;
+  }
+  .stat-lbl { font-size: .72rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: .08em; }
+
+  /* ── Progress section ────────────────────────────────── */
+  .progress-section { margin-bottom: 2rem; }
+  .progress-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: .5rem; }
+  .progress-label { font-family: var(--mono); font-size: .82rem; color: var(--text-dim); }
+  .progress-pct   { font-family: var(--mono); font-size: .9rem; color: var(--green); }
+
+  /* ── Terminal log ────────────────────────────────────── */
+  .terminal {
+    background: #060810;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    height: 200px;
+    overflow-y: auto;
+    font-family: var(--mono);
+    font-size: .78rem;
+    margin-bottom: 2rem;
+  }
+  .log-line { line-height: 1.7; }
+  .log-ts   { color: var(--text-muted); margin-right: .5rem; }
+  .log-open { color: var(--green); }
+  .log-info { color: var(--cyan); }
+  .log-warn { color: var(--yellow); }
+  .log-err  { color: var(--red); }
+
+  /* ── Results table ───────────────────────────────────── */
+  .results-section { }
+  .results-header  { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+  #open-count-badge {
+    background: var(--green-dark);
+    color: var(--green);
+    border: 1px solid #00ff9440;
+    border-radius: 999px;
+    padding: .15rem .65rem;
+    font-family: var(--mono);
+    font-size: .8rem;
+  }
+  .port-table-wrap { overflow-x: auto; }
+
+  /* ── Status indicator ────────────────────────────────── */
+  .status-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    margin-right: .5rem;
+    vertical-align: middle;
+  }
+  .status-dot.running { background: var(--cyan); animation: pulse-glow 1.5s ease infinite; }
+  .status-dot.completed { background: var(--green); }
+  .status-dot.failed    { background: var(--red); }
+  .status-dot.pending   { background: var(--yellow); }
+
+  @keyframes pulse-glow {
+    0%,100% { box-shadow: 0 0 4px var(--cyan); }
+    50%      { box-shadow: 0 0 14px var(--cyan); }
+  }
+
+  .cursor { display: inline-block; width: 8px; background: var(--green); animation: blink 1s step-end infinite; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="scan-header animate-in">
+  <div class="scan-meta">
+    <div class="scan-target">
+      <span class="status-dot {% if job.status == 'RUNNING' %}running{% elif job.status == 'COMPLETED' %}completed{% elif job.status == 'FAILED' %}failed{% else %}pending{% endif %}"
+            id="status-dot"></span>
+      {{ job.target }}
+    </div>
+    <div class="scan-sub">
+      Ports {{ job.port_start }}–{{ job.port_end }}
+      &nbsp;·&nbsp;
+      <span id="status-text">{{ job.status }}</span>
+      {% if job.resolved_ip %}
+        &nbsp;·&nbsp; <span class="mono">{{ job.resolved_ip }}</span>
+      {% endif %}
+      <span id="duration-text" {% if not job.duration_seconds %}style="display:none"{% endif %}>
+        &nbsp;·&nbsp; <span id="duration-val">{% if job.duration_seconds %}{{ job.duration_seconds|floatformat:2 }}s{% endif %}</span>
+      </span>
+    </div>
+  </div>
+  <div class="scan-actions">
+    <a href="{% url 'index' %}" class="btn btn-ghost">+ New Scan</a>
+    <a href="{% url 'scan_history' %}" class="btn btn-ghost">History</a>
+    <a href="{% url 'scan_status' job.pk %}" class="btn btn-ghost" target="_blank" title="Raw JSON">{ }</a>
+  </div>
+</div>
+
+<!-- ── Stats ── -->
+<div class="stats-grid">
+  <div class="stat-card" style="animation-delay:.05s">
+    <span class="stat-val" id="stat-open">{{ job.open_ports }}</span>
+    <span class="stat-lbl">Open Ports</span>
+  </div>
+  <div class="stat-card" style="animation-delay:.1s">
+    <span class="stat-val" id="stat-scanned">{{ job.scanned_ports }}</span>
+    <span class="stat-lbl">Scanned</span>
+  </div>
+  <div class="stat-card" style="animation-delay:.15s">
+    <span class="stat-val">{{ job.total_ports }}</span>
+    <span class="stat-lbl">Total</span>
+  </div>
+  <div class="stat-card" style="animation-delay:.2s">
+    <span class="stat-val text-cyan" id="stat-pct">{{ job.progress_pct }}%</span>
+    <span class="stat-lbl">Progress</span>
+  </div>
+</div>
+
+<!-- ── Progress bar ── -->
+<div class="progress-section animate-in">
+  <div class="progress-header">
+    <span class="progress-label" id="progress-label">
+      {% if job.status == 'COMPLETED' %}Scan complete{% elif job.status == 'RUNNING' %}Scanning…{% else %}{{ job.status }}{% endif %}
+    </span>
+    <span class="progress-pct" id="progress-pct">{{ job.progress_pct }}%</span>
+  </div>
+  <div class="progress-wrap">
+    <div class="progress-bar" id="progress-bar" style="width:{{ job.progress_pct }}%"></div>
+  </div>
+</div>
+
+<!-- ── Terminal log ── -->
+<div class="terminal" id="terminal-log">
+  <div class="log-line"><span class="log-ts">[INIT]</span><span class="log-info">Job {{ job.pk }} · status: {{ job.status }}</span></div>
+  {% if job.resolved_ip %}
+  <div class="log-line"><span class="log-ts">[DNS ]</span><span class="log-info">Resolved {{ job.target }} → {{ job.resolved_ip }}</span></div>
+  {% endif %}
+</div>
+
+<!-- ── Open ports table ── -->
+<div class="results-section">
+  <div class="results-header">
+    <div class="card-title" style="margin:0">Open Ports</div>
+    <span id="open-count-badge">{{ job.open_ports }} found</span>
+  </div>
+  <div class="card port-table-wrap" style="padding:0;overflow:hidden">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Port</th>
+          <th>Status</th>
+          <th>Service</th>
+          <th>Banner</th>
+          <th>Timestamp</th>
+        </tr>
+      </thead>
+      <tbody id="results-tbody">
+        {% for r in open_results %}
+        <tr>
+          <td class="mono text-green">{{ r.port }}</td>
+          <td><span class="badge badge-open">OPEN</span></td>
+          <td class="mono text-dim">{{ r.port|well_known_service }}</td>
+          <td class="mono" style="max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ r.banner }}">{{ r.banner|default:"—" }}</td>
+          <td class="text-dim" style="font-size:.8rem">{{ r.timestamp|date:"H:i:s" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if not open_results and job.status == 'COMPLETED' %}
+    <div style="padding:1.5rem;text-align:center;color:var(--text-muted);font-size:.88rem">No open ports found in this range.</div>
+    {% endif %}
+    {% if job.status in 'PENDING,RUNNING' %}
+    <div style="padding:1rem;color:var(--text-muted);font-size:.82rem;font-family:var(--mono)">
+      Scanning… open ports will appear here in real time. <span class="cursor">&nbsp;</span>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+const SERVICES = {
+  21:"FTP",22:"SSH",23:"Telnet",25:"SMTP",53:"DNS",
+  80:"HTTP",110:"POP3",143:"IMAP",443:"HTTPS",
+  465:"SMTPS",587:"Submission",993:"IMAPS",995:"POP3S",
+  3306:"MySQL",5432:"PostgreSQL",6379:"Redis",
+  8080:"HTTP-Alt",8443:"HTTPS-Alt",27017:"MongoDB",
+  3389:"RDP",5900:"VNC",11211:"Memcached",
+};
+
+// ── DOM refs ───────────────────────────────────────────
+const progressBar   = document.getElementById("progress-bar");
+const progressPct   = document.getElementById("progress-pct");
+const progressLabel = document.getElementById("progress-label");
+const statOpen      = document.getElementById("stat-open");
+const statScanned   = document.getElementById("stat-scanned");
+const statPct       = document.getElementById("stat-pct");
+const statusText    = document.getElementById("status-text");
+const statusDot     = document.getElementById("status-dot");
+const openBadge     = document.getElementById("open-count-badge");
+const resultsTbody  = document.getElementById("results-tbody");
+const terminalLog   = document.getElementById("terminal-log");
+const durationText  = document.getElementById("duration-text");
+const durationVal   = document.getElementById("duration-val");
+
+// ── State ──────────────────────────────────────────────
+let scanDone   = "{{ job.status }}" === "COMPLETED" || "{{ job.status }}" === "FAILED";
+let knownPorts = new Set(
+  [...document.querySelectorAll("#results-tbody tr td:first-child")]
+    .map(td => parseInt(td.textContent))
+);
+
+// ── Helpers ────────────────────────────────────────────
+function logLine(msg, cls="log-info") {
+  const now = new Date().toTimeString().slice(0,8);
+  const div = document.createElement("div");
+  div.className = "log-line";
+  div.innerHTML = `<span class="log-ts">[${now}]</span><span class="${cls}">${msg}</span>`;
+  terminalLog.appendChild(div);
+  terminalLog.scrollTop = terminalLog.scrollHeight;
+}
+
+function setProgress(pct, scanned) {
+  progressBar.style.width = Math.min(100, pct) + "%";
+  progressPct.textContent = pct + "%";
+  statPct.textContent     = pct + "%";
+  if (scanned !== undefined && scanned !== null) statScanned.textContent = scanned;
+}
+
+function updateStatus(status) {
+  statusText.textContent = status;
+  statusDot.className    = "status-dot " + status.toLowerCase();
+}
+
+function addPortRow(port, banner, timestamp) {
+  if (knownPorts.has(port)) return;
+  knownPorts.add(port);
+  const time = timestamp
+    ? new Date(timestamp).toTimeString().slice(0,8)
+    : new Date().toTimeString().slice(0,8);
+  const tr = document.createElement("tr");
+  tr.style.animation = "fadeInUp .25s ease both";
+  tr.innerHTML = `
+    <td class="mono text-green">${port}</td>
+    <td><span class="badge badge-open">OPEN</span></td>
+    <td class="mono text-dim">${SERVICES[port]||"—"}</td>
+    <td class="mono" style="max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+        title="${banner||''}">${banner||"—"}</td>
+    <td class="text-dim" style="font-size:.8rem">${time}</td>`;
+  resultsTbody.appendChild(tr);
+  statOpen.textContent  = knownPorts.size;
+  openBadge.textContent = knownPorts.size + " found";
+}
+
+function markDone(openCount, duration, failed) {
+  scanDone = true;
+  clearInterval(pollTimer);
+  if (failed) {
+    updateStatus("FAILED");
+    progressLabel.textContent = "Scan failed";
+    progressBar.style.background = "var(--red)";
+  } else {
+    updateStatus("COMPLETED");
+    setProgress(100, null);
+    progressLabel.textContent = "Scan complete";
+    if (openCount !== undefined) {
+      statOpen.textContent  = openCount;
+      openBadge.textContent = openCount + " found";
+    }
+  }
+  if (duration) {
+    durationVal.textContent = parseFloat(duration).toFixed(2) + "s";
+    durationText.style.display = "";
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// POLLING — starts immediately, always the reliable baseline.
+// Runs every 2 s until the scan finishes.
+// ─────────────────────────────────────────────────────────────
+let pollTimer = null;
+
+async function doPoll() {
+  if (scanDone) { clearInterval(pollTimer); return; }
+  try {
+    const resp = await fetch("{% url 'scan_status' job.pk %}");
+    const d    = await resp.json();
+
+    setProgress(d.progress_pct, d.scanned_ports);
+    updateStatus(d.status);
+
+    for (const r of (d.open_results || [])) {
+      addPortRow(r.port, r.banner, r.timestamp);
+    }
+
+    if (d.status === "RUNNING") {
+      progressLabel.textContent = `Scanning… ${d.scanned_ports} / ${d.total_ports} ports`;
+    } else if (d.status === "PENDING") {
+      progressLabel.textContent = "Queued — waiting for worker…";
+    } else if (d.status === "COMPLETED" || d.status === "FAILED") {
+      markDone(d.open_ports, d.duration, d.status === "FAILED");
+      if (d.error_message) logLine("ERROR: " + d.error_message, "log-err");
+    }
+  } catch (err) {
+    logLine("Poll error: " + err.message, "log-warn");
+  }
+}
+
+if (!scanDone) {
+  doPoll();                              // immediate first tick
+  pollTimer = setInterval(doPoll, 2000); // then every 2 s
+}
+
+// ─────────────────────────────────────────────────────────────
+// WEBSOCKET — enhancement layer; gives faster per-port updates.
+// If WS works, it reduces UI latency. If it fails, polling covers.
+// ─────────────────────────────────────────────────────────────
+{% if job.status == 'PENDING' or job.status == 'RUNNING' %}
+(function() {
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  const ws    = new WebSocket(`${proto}//${location.host}/ws/scan/{{ job.pk }}/`);
+
+  ws.onopen  = () => logLine("WebSocket connected — live stream active", "log-info");
+  ws.onerror = () => logLine("WebSocket unavailable — polling active", "log-warn");
+
+  ws.onmessage = function(e) {
+    if (scanDone) return;
+    const msg = JSON.parse(e.data);
+
+    if (msg.type === "status") {
+      updateStatus(msg.status);
+
+    } else if (msg.type === "started") {
+      logLine(`Resolved → ${msg.resolved_ip} · ${msg.total_ports} ports`, "log-info");
+      updateStatus("RUNNING");
+
+    } else if (msg.type === "progress") {
+      setProgress(msg.pct, msg.scanned);
+      progressLabel.textContent = `Scanning… ${msg.scanned} / ${msg.total} ports`;
+
+    } else if (msg.type === "port_result") {
+      setProgress(msg.pct, msg.scanned);
+      progressLabel.textContent = `Scanning… ${msg.scanned} / ${msg.total} ports`;
+      addPortRow(msg.port, msg.banner, null);
+      logLine(
+        `PORT ${String(msg.port).padStart(5)}  OPEN  ${SERVICES[msg.port]||""}` +
+        (msg.banner ? " · " + msg.banner.slice(0,60) : ""),
+        "log-open"
+      );
+
+    } else if (msg.type === "completed") {
+      logLine(`Complete — ${msg.open_ports} open · ${(msg.duration||0).toFixed(2)}s`, "log-info");
+      markDone(msg.open_ports, msg.duration, false);
+      ws.close();
+
+    } else if (msg.type === "failed") {
+      logLine("ERROR: " + msg.error, "log-err");
+      markDone(0, null, true);
+      ws.close();
+    }
+  };
+})();
+{% endif %}
+</script>
+{% endblock %}

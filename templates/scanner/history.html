@@ -1,0 +1,104 @@
+{% extends "scanner/base.html" %}
+{% block title %}NetProbe — Scan History{% endblock %}
+
+{% block extra_head %}
+<style>
+  .history-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 2rem;
+  }
+  .history-title {
+    font-family: var(--mono);
+    font-size: 1.3rem;
+    color: var(--green);
+    text-shadow: var(--glow);
+  }
+  .history-table-wrap { overflow-x: auto; }
+  .tag-open-ports {
+    font-family: var(--mono);
+    font-size: .85rem;
+    color: var(--green);
+  }
+  .pagination { display: flex; gap: .5rem; margin-top: 1.5rem; align-items: center; }
+  .page-btn {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: .4rem .8rem;
+    border-radius: var(--radius);
+    text-decoration: none;
+    font-family: var(--mono);
+    font-size: .82rem;
+    transition: border-color .2s, color .2s;
+  }
+  .page-btn:hover, .page-btn.active { border-color: var(--green); color: var(--green); }
+  .page-info { color: var(--text-dim); font-size: .82rem; margin-left: auto; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="history-header animate-in">
+  <div class="history-title">&gt;_ Scan History</div>
+  <a href="{% url 'index' %}" class="btn btn-primary">+ New Scan</a>
+</div>
+
+<div class="card animate-in">
+  <div class="history-table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Target</th>
+          <th>Resolved IP</th>
+          <th>Port Range</th>
+          <th>Open</th>
+          <th>Status</th>
+          <th>Duration</th>
+          <th>Created</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for job in page_obj %}
+        <tr>
+          <td class="mono">{{ job.target }}</td>
+          <td class="mono text-dim">{{ job.resolved_ip|default:"—" }}</td>
+          <td class="mono text-dim">{{ job.port_start }}–{{ job.port_end }}</td>
+          <td class="tag-open-ports">
+            {% if job.status == 'COMPLETED' %}{{ job.open_ports }}{% else %}—{% endif %}
+          </td>
+          <td><span class="badge badge-{{ job.status|lower }}">{{ job.status }}</span></td>
+          <td class="mono text-dim" style="font-size:.82rem">
+            {% if job.duration_seconds %}{{ job.duration_seconds|floatformat:1 }}s{% else %}—{% endif %}
+          </td>
+          <td class="text-dim" style="font-size:.8rem">{{ job.created_at|date:"Y-m-d H:i" }}</td>
+          <td>
+            <a href="{% url 'scan_detail' job.pk %}" class="btn btn-ghost" style="font-size:.78rem;padding:.35rem .7rem;">View</a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="8" style="text-align:center;color:var(--text-muted);padding:2rem;">
+            No scan history yet.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if page_obj.has_other_pages %}
+  <div class="pagination">
+    {% if page_obj.has_previous %}
+      <a class="page-btn" href="?page={{ page_obj.previous_page_number }}">← Prev</a>
+    {% endif %}
+    {% for num in page_obj.paginator.page_range %}
+      <a class="page-btn {% if num == page_obj.number %}active{% endif %}" href="?page={{ num }}">{{ num }}</a>
+    {% endfor %}
+    {% if page_obj.has_next %}
+      <a class="page-btn" href="?page={{ page_obj.next_page_number }}">Next →</a>
+    {% endif %}
+    <span class="page-info">{{ page_obj.paginator.count }} total scans</span>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

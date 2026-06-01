@@ -1,0 +1,150 @@
+{% extends "scanner/base.html" %}
+{% block title %}NetProbe — New Scan{% endblock %}
+
+{% block extra_head %}
+<style>
+  .hero { text-align: center; padding: 3rem 0 2.5rem; }
+  .hero-title {
+    font-family: var(--mono);
+    font-size: clamp(2rem, 5vw, 3.2rem);
+    color: var(--green);
+    text-shadow: var(--glow-lg);
+    letter-spacing: .05em;
+  }
+  .hero-title span { color: var(--text-dim); }
+  .hero-sub {
+    color: var(--text-dim);
+    font-size: .95rem;
+    margin-top: .6rem;
+    letter-spacing: .03em;
+  }
+  .grid-2 { display: grid; grid-template-columns: 1.4fr 1fr; gap: 1.5rem; }
+  @media (max-width: 700px) { .grid-2 { grid-template-columns: 1fr; } }
+  .scan-form-card { animation: fadeInUp .4s ease .1s both; }
+  .recent-card    { animation: fadeInUp .4s ease .2s both; }
+  .submit-row     { display: flex; align-items: center; gap: 1rem; margin-top: 1.5rem; }
+  .port-limit-note { font-size: .75rem; color: var(--text-muted); }
+  .scan-warn {
+    background: #1a1500;
+    border: 1px solid #ffd70040;
+    color: var(--yellow);
+    border-radius: var(--radius);
+    padding: .65rem 1rem;
+    font-size: .8rem;
+    margin-bottom: 1.25rem;
+  }
+  .recent-row td:first-child { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .no-history { color: var(--text-muted); font-size: .88rem; padding: .5rem 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="hero animate-in">
+  <div class="hero-title">NET<span>PROBE</span></div>
+  <div class="hero-sub">Async TCP port scanner · SSRF-safe · non-root</div>
+</div>
+
+<div class="grid-2">
+  <!-- ── Scan form ── -->
+  <div class="card scan-form-card">
+    <div class="card-title">Initiate Scan</div>
+
+    <div class="scan-warn">
+      ⚠ Scanning hosts you do not own or have explicit permission to test may be illegal.
+      Use responsibly — internal / private ranges are blocked.
+    </div>
+
+    {% if form.errors %}
+      <div class="alert alert-error">
+        {% for field in form %}{% for err in field.errors %}{{ field.label }}: {{ err }}<br>{% endfor %}{% endfor %}
+        {% for err in form.non_field_errors %}{{ err }}<br>{% endfor %}
+      </div>
+    {% endif %}
+
+    <form method="post" action="{% url 'start_scan' %}">
+      {% csrf_token %}
+
+      <div class="field">
+        <label>{{ form.target.label }}</label>
+        {{ form.target }}
+        <div class="help-text">{{ form.target.help_text }}</div>
+      </div>
+
+      <div class="field">
+        <label>{{ form.preset.label }}</label>
+        {{ form.preset }}
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label>{{ form.port_start.label }}</label>
+          {{ form.port_start }}
+        </div>
+        <div class="field">
+          <label>{{ form.port_end.label }}</label>
+          {{ form.port_end }}
+        </div>
+      </div>
+
+      <div class="submit-row">
+        <button type="submit" class="btn btn-primary">
+          <span>&gt;_</span> Launch Scan
+        </button>
+        <span class="port-limit-note">Max {{ request.settings.SCANNER_MAX_PORT_RANGE|default:"1,000" }} ports per scan</span>
+      </div>
+    </form>
+  </div>
+
+  <!-- ── Recent scans ── -->
+  <div class="card recent-card">
+    <div class="card-title">Recent Scans</div>
+    {% if recent_jobs %}
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Target</th>
+            <th>Range</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for job in recent_jobs %}
+          <tr style="cursor:pointer" onclick="location.href='{% url 'scan_detail' job.pk %}'">
+            <td class="mono">{{ job.target }}</td>
+            <td class="mono text-dim">{{ job.port_start }}–{{ job.port_end }}</td>
+            <td><span class="badge badge-{{ job.status|lower }}">{{ job.status }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div class="mt-2">
+        <a href="{% url 'scan_history' %}" class="btn btn-ghost" style="font-size:.8rem;padding:.45rem 1rem;">
+          View all history →
+        </a>
+      </div>
+    {% else %}
+      <p class="no-history">No scans yet. Launch your first scan above.</p>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+  // Populate port fields from preset selector
+  const presets = {
+    "1-1024":    [1, 1024],
+    "1-100":     [1, 100],
+    "80-80":     [80, 80],
+    "443-443":   [443, 443],
+    "20-25":     [20, 25],
+    "3000-3100": [3000, 3100],
+    "8000-8100": [8000, 8100],
+  };
+  document.getElementById("id_preset").addEventListener("change", function () {
+    const val = this.value;
+    if (val && presets[val]) {
+      document.getElementById("id_port_start").value = presets[val][0];
+      document.getElementById("id_port_end").value   = presets[val][1];
+    }
+  });
+</script>
+{% endblock %}

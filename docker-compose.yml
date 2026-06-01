@@ -1,0 +1,70 @@
+version: "3.9"
+
+# ─────────────────────────────────────────────────────────────────
+#  NetProbe — Docker Compose
+#
+#  Services:
+#    redis   - message broker + channel layer
+#    web     - Daphne ASGI server (HTTP + WebSockets)
+#    worker  - Celery worker
+#
+#  Quick start:
+#    docker compose up --build
+#    # Then open http://localhost:8000
+# ─────────────────────────────────────────────────────────────────
+
+services:
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  web:
+    build: .
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py collectstatic --noinput &&
+             daphne -b 0.0.0.0 -p 8000 portscanner.asgi:application"
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DJANGO_SECRET_KEY: change-me-in-production
+      DEBUG: "True"
+      ALLOWED_HOSTS: "localhost 127.0.0.1 0.0.0.0"
+      SCANNER_MAX_PORT_RANGE: "1000"
+      SCANNER_CONNECT_TIMEOUT: "0.5"
+      SCANNER_MAX_CONCURRENCY: "200"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    build: .
+    command: celery -A portscanner worker -l info --concurrency=4
+    volumes:
+      - .:/app
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DJANGO_SECRET_KEY: change-me-in-production
+      DEBUG: "True"
+      SCANNER_MAX_PORT_RANGE: "1000"
+      SCANNER_CONNECT_TIMEOUT: "0.5"
+      SCANNER_MAX_CONCURRENCY: "200"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  db_data:

@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}NetProbe — Port Scanner{% endblock %}</title>
+  {% load static %}
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:wght@300;400;600;800&display=swap" rel="stylesheet" />
+  <style>
+    /* ── CSS Variables ─────────────────────────────────────── */
+    :root {
+      --bg:        #090c10;
+      --bg-card:   #0d1117;
+      --bg-hover:  #161b22;
+      --border:    #21262d;
+      --border-glow: #00ff9440;
+      --text:      #c9d1d9;
+      --text-dim:  #8b949e;
+      --text-muted:#484f58;
+      --green:     #00ff94;
+      --green-dim: #00cc77;
+      --green-dark:#003322;
+      --cyan:      #00d8ff;
+      --red:       #ff4757;
+      --yellow:    #ffd700;
+      --purple:    #bd93f9;
+      --mono:      'Share Tech Mono', monospace;
+      --sans:      'Exo 2', sans-serif;
+      --radius:    6px;
+      --glow:      0 0 12px #00ff9460;
+      --glow-lg:   0 0 32px #00ff9440, 0 0 64px #00ff9420;
+    }
+
+    /* ── Reset ─────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-size: 15px; scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      min-height: 100vh;
+      line-height: 1.6;
+      /* subtle grid pattern */
+      background-image:
+        linear-gradient(rgba(0,255,148,.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,255,148,.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+
+    /* ── Scrollbar ──────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--green-dim); }
+
+    /* ── Nav ────────────────────────────────────────────────── */
+    nav {
+      border-bottom: 1px solid var(--border);
+      background: rgba(9,12,16,.9);
+      backdrop-filter: blur(12px);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .nav-inner {
+      max-width: 1100px; margin: 0 auto;
+      display: flex; align-items: center; gap: 2rem;
+      padding: .85rem 1.5rem;
+    }
+    .nav-logo {
+      font-family: var(--mono);
+      font-size: 1.2rem;
+      color: var(--green);
+      text-decoration: none;
+      text-shadow: var(--glow);
+      display: flex; align-items: center; gap: .5rem;
+    }
+    .nav-logo::before { content: '>_'; color: var(--green); opacity: .7; }
+    .nav-links { display: flex; gap: 1.5rem; margin-left: auto; }
+    .nav-links a {
+      color: var(--text-dim); text-decoration: none;
+      font-size: .85rem; letter-spacing: .05em; text-transform: uppercase;
+      transition: color .2s;
+    }
+    .nav-links a:hover { color: var(--green); }
+
+    /* ── Layout ─────────────────────────────────────────────── */
+    main { max-width: 1100px; margin: 0 auto; padding: 2.5rem 1.5rem 4rem; }
+
+    /* ── Cards ──────────────────────────────────────────────── */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.75rem;
+      transition: border-color .25s;
+    }
+    .card:hover { border-color: var(--border-glow); }
+    .card-title {
+      font-family: var(--mono);
+      font-size: .75rem;
+      letter-spacing: .15em;
+      text-transform: uppercase;
+      color: var(--green);
+      margin-bottom: 1.25rem;
+      display: flex; align-items: center; gap: .5rem;
+    }
+    .card-title::before { content: '//'; opacity: .5; }
+
+    /* ── Form elements ──────────────────────────────────────── */
+    label {
+      display: block;
+      font-size: .78rem;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: .4rem;
+    }
+    .form-input, .form-select {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: .95rem;
+      padding: .6rem .9rem;
+      outline: none;
+      transition: border-color .2s, box-shadow .2s;
+      -webkit-appearance: none;
+    }
+    .form-input:focus, .form-select:focus {
+      border-color: var(--green-dim);
+      box-shadow: 0 0 0 3px rgba(0,255,148,.1);
+    }
+    .form-input::placeholder { color: var(--text-muted); }
+    .form-select option { background: var(--bg-card); }
+    .field { margin-bottom: 1.1rem; }
+    .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .help-text { font-size: .78rem; color: var(--text-muted); margin-top: .3rem; }
+
+    /* ── Buttons ────────────────────────────────────────────── */
+    .btn {
+      display: inline-flex; align-items: center; gap: .5rem;
+      padding: .7rem 1.4rem;
+      border-radius: var(--radius);
+      border: none; cursor: pointer;
+      font-family: var(--mono); font-size: .9rem;
+      letter-spacing: .04em;
+      text-decoration: none;
+      transition: all .2s;
+    }
+    .btn-primary {
+      background: var(--green);
+      color: #000;
+      font-weight: 700;
+      box-shadow: var(--glow);
+    }
+    .btn-primary:hover {
+      background: #00ffaa;
+      box-shadow: var(--glow-lg);
+      transform: translateY(-1px);
+    }
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+    }
+    .btn-ghost:hover { border-color: var(--green); color: var(--green); }
+
+    /* ── Status badges ──────────────────────────────────────── */
+    .badge {
+      display: inline-block;
+      padding: .15rem .55rem;
+      border-radius: 3px;
+      font-family: var(--mono);
+      font-size: .75rem;
+      font-weight: 700;
+      letter-spacing: .05em;
+    }
+    .badge-open    { background: var(--green-dark); color: var(--green); border: 1px solid #00ff9440; }
+    .badge-closed  { background: #1a0005; color: var(--red); border: 1px solid #ff475730; }
+    .badge-pending { background: #1a1500; color: var(--yellow); border: 1px solid #ffd70040; }
+    .badge-running { background: #001630; color: var(--cyan); border: 1px solid #00d8ff40; }
+    .badge-failed  { background: #1a0005; color: var(--red); border: 1px solid #ff475730; }
+    .badge-completed { background: var(--green-dark); color: var(--green); border: 1px solid #00ff9440; }
+
+    /* ── Progress bar ───────────────────────────────────────── */
+    .progress-wrap {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+      height: 8px;
+    }
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, var(--green-dim), var(--green));
+      box-shadow: var(--glow);
+      transition: width .3s ease;
+      width: 0%;
+    }
+
+    /* ── Alerts ─────────────────────────────────────────────── */
+    .alert {
+      padding: .75rem 1rem;
+      border-radius: var(--radius);
+      font-size: .88rem;
+      margin-bottom: 1rem;
+    }
+    .alert-error { background: #1a0005; border: 1px solid var(--red); color: var(--red); }
+    .alert-info  { background: #001630; border: 1px solid var(--cyan); color: var(--cyan); }
+
+    /* ── Table ──────────────────────────────────────────────── */
+    .data-table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: .88rem; }
+    .data-table th {
+      text-align: left; padding: .6rem .8rem;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-dim);
+      font-size: .72rem; letter-spacing: .1em; text-transform: uppercase;
+    }
+    .data-table td { padding: .55rem .8rem; border-bottom: 1px solid var(--border); }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table tr:hover td { background: var(--bg-hover); }
+
+    /* ── Utility ────────────────────────────────────────────── */
+    .mono { font-family: var(--mono); }
+    .text-green { color: var(--green); }
+    .text-dim   { color: var(--text-dim); }
+    .text-red   { color: var(--red); }
+    .text-cyan  { color: var(--cyan); }
+    .flex       { display: flex; }
+    .items-center { align-items: center; }
+    .gap-1 { gap: .4rem; }
+    .gap-2 { gap: .8rem; }
+    .mt-1 { margin-top: .5rem; }
+    .mt-2 { margin-top: 1rem; }
+    .mt-3 { margin-top: 1.5rem; }
+    .mb-2 { margin-bottom: 1rem; }
+    .ml-auto { margin-left: auto; }
+
+    /* ── Animations ─────────────────────────────────────────── */
+    @keyframes pulse-glow {
+      0%,100% { box-shadow: 0 0 6px #00ff9440; }
+      50%      { box-shadow: 0 0 20px #00ff9480; }
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .animate-in { animation: fadeInUp .3s ease forwards; }
+    .blink { animation: blink 1s step-end infinite; }
+
+    /* ── Scan row entry animation ───────────────────────────── */
+    .result-row-enter {
+      animation: fadeInUp .25s ease both;
+    }
+  </style>
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+  <nav>
+    <div class="nav-inner">
+      <a href="{% url 'index' %}" class="nav-logo">NetProbe</a>
+      <div class="nav-links">
+        <a href="{% url 'index' %}">New Scan</a>
+        <a href="{% url 'scan_history' %}">History</a>
+        <a href="/admin/">Admin</a>
+      </div>
+    </div>
+  </nav>
+
+  <main>
+    {% for msg in messages %}
+      <div class="alert alert-error">{{ msg }}</div>
+    {% endfor %}
+
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>
